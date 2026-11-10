@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wizzard64: your all-in-one retro game emulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!--
+=====================================================================
+  WIZZARD64 WEBSITE: HOW TO EDIT THIS FILE (no coding brain needed)
+=====================================================================
+  1. Open this file in VS Code, right click, "Open with Live Server".
+     Every time you save (Ctrl+S) the page updates on its own.
+  2. Press Ctrl+F and search for the word  EDIT  to jump to every
+     spot you are meant to change.
+  3. The big list of things you can change lives in the block called
+     "SETTINGS" near the bottom (search: SETTINGS). Adding a console,
+     a feature, a step or a question = copy one line, paste it under
+     itself, change the words.
+  4. Colors are the 6 lines at the top of the STYLE section
+     (search: COLORS).
+  5. Want a brand new section? Copy a whole block that starts with
+     "<!-- SECTION:" and ends with "</section>", paste it, rename it.
+  6. This file is saved next to your emulator's index.html so the
+     "Play now" button can open it. Don't rename this file's folder.
+=====================================================================
+-->
+
+<style>
+/* ===================== COLORS (EDIT) =====================
+   Change these and the WHOLE site changes with them.
+   Use any hex color, e.g. #ff0055                                  */
+:root{
+  --bg:      #0b0820;   /* page background            */
+  --panel:   #17123f;   /* cards and boxes            */
+  --text:    #f1ecff;   /* main text                  */
+  --muted:   #a79fd0;   /* softer text                */
+  --accent:  #8b5cf6;   /* main color (buttons, glow) */
+  --accent2: #22d3ee;   /* second color               */
+  --gold:    #f5c542;   /* small highlights           */
+
+  /* ===== ANIMATION SPEED (EDIT) =====
+     Smaller number = snappier. Try 0.2s for super fast.            */
+  --snap: .35s;
+  --ease: cubic-bezier(.2,.9,.25,1.2);   /* springy overshoot */
+}
+
+/* ===================== BASE STYLES (don't need to touch) ===================== */
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font:400 1.05rem/1.6 'Outfit',system-ui,sans-serif;overflow-x:hidden}
+h1,h2,h3{font-family:'Unbounded','Outfit',sans-serif;line-height:1.1}
+a{color:inherit;text-decoration:none}
+section{padding:7rem 1.5rem;max-width:1100px;margin:0 auto;position:relative}
+h2{font-size:clamp(1.8rem,4.5vw,3rem);margin-bottom:.8rem}
+.lead{color:var(--muted);max-width:55ch;margin-bottom:3rem}
+:focus-visible{outline:3px solid var(--accent2);outline-offset:3px}
+
+/* Background glow blobs that drift around */
+.blob{position:fixed;width:46vmax;height:46vmax;border-radius:50%;filter:blur(90px);opacity:.28;z-index:-1;animation:drift 14s ease-in-out infinite alternate}
+.blob.a{background:var(--accent);top:-15vmax;left:-12vmax}
+.blob.b{background:var(--accent2);bottom:-20vmax;right:-14vmax;animation-duration:19s;opacity:.18}
+@keyframes drift{to{transform:translate(8vmax,6vmax) scale(1.15)}}
+#sparks{position:fixed;inset:0;z-index:-1;pointer-events:none}
+#progress{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2),var(--gold));z-index:100}
+
+/* ===================== BOOT SPLASH ===================== */
+#splash{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:200;transition:opacity .5s,visibility .5s}
+#splash.gone{opacity:0;visibility:hidden}
+#splash .logo{width:min(220px,50vw);animation:pop 1s var(--ease) both;filter:drop-shadow(0 0 30px var(--accent))}
+#splash .logo-text{font:800 2.4rem 'Unbounded';animation:pop 1s var(--ease) both}
+@keyframes pop{from{transform:scale(.3) rotate(-12deg);opacity:0}}
+
+/* ===================== NAVIGATION ===================== */
+nav{position:fixed;top:0;left:0;right:0;z-index:90;display:flex;justify-content:space-between;align-items:center;padding:1rem 1.5rem;transition:var(--snap);}
+nav.stuck{background:rgba(11,8,32,.78);backdrop-filter:blur(14px);padding:.6rem 1.5rem;box-shadow:0 8px 30px #0006}
+.brand{font:800 1.15rem 'Unbounded'}
+nav ul{display:flex;gap:.4rem;list-style:none}
+nav ul a{padding:.45rem .9rem;border-radius:99px;color:var(--muted);transition:var(--snap)}
+nav ul a:hover{background:var(--panel);color:var(--text);transform:translateY(-2px)}
+@media(max-width:640px){nav ul li:not(:last-child){display:none}}
+
+/* ===================== BUTTONS ===================== */
+.btn{display:inline-block;padding:.95rem 1.8rem;border-radius:14px;font-weight:600;border:2px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;transition:transform var(--snap) var(--ease),box-shadow var(--snap),background var(--snap)}
+.btn:hover{box-shadow:0 10px 40px var(--accent);transform:translateY(-3px) scale(1.05)}
+.btn:active{transform:scale(.95)}
+.btn.ghost{background:transparent;color:var(--text)}
+.btn.ghost:hover{background:var(--panel);box-shadow:0 10px 40px #0008}
+
+/* ===================== HERO ===================== */
+#home{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding-top:8rem}
+.title{font-size:clamp(2.6rem,11vw,7.5rem);font-weight:800;letter-spacing:-.03em;display:flex;flex-wrap:wrap}
+.title span{display:inline-block;opacity:0;transform:translateY(60px) rotate(8deg) scale(.6);animation:letter .7s var(--ease) forwards;animation-delay:calc(var(--i) * 60ms + 1.5s);cursor:default;transition:color .2s,transform .2s}
+.title span:hover{color:var(--accent2);transform:translateY(-14px) rotate(-6deg) scale(1.12)}
+@keyframes letter{to{opacity:1;transform:none}}
+.tagline{font-size:clamp(1.1rem,2.4vw,1.6rem);color:var(--muted);margin:1.2rem 0 2.2rem;min-height:2.2em}
+.tagline b{color:var(--accent2);font-weight:600}
+.caret{display:inline-block;width:3px;height:1.1em;background:var(--accent2);margin-left:3px;vertical-align:-.15em;animation:blink .8s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.hero-btns{display:flex;gap:1rem;flex-wrap:wrap;opacity:0;animation:letter .6s var(--ease) 2.6s forwards}
+
+/* ===================== MARQUEE (scrolling console names) ===================== */
+.marquee{overflow:hidden;border-block:1px solid #ffffff14;padding:1rem 0;background:#ffffff05;max-width:none;margin:0;padding-inline:0}
+.marquee div{display:flex;gap:3rem;width:max-content;animation:scroll 28s linear infinite;font:600 1.2rem 'Unbounded';color:var(--muted)}
+.marquee:hover div{animation-play-state:paused}
+.marquee span:nth-child(3n){color:var(--accent2)}
+@keyframes scroll{to{transform:translateX(-50%)}}
+
+/* ===================== STATS ===================== */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1.2rem}
+.stat{text-align:center;padding:1.6rem 1rem;background:var(--panel);border-radius:18px;transition:transform var(--snap) var(--ease)}
+.stat:hover{transform:translateY(-8px) rotate(-1.5deg)}
+.stat strong{display:block;font:800 2.6rem 'Unbounded';color:var(--gold)}
+.stat small{color:var(--muted)}
+
+/* ===================== CARDS (consoles + features) ===================== */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1.1rem;perspective:900px}
+.card{background:var(--panel);border:1px solid #ffffff12;border-radius:18px;padding:1.4rem;position:relative;overflow:hidden;
+  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .15s,border-color var(--snap),box-shadow var(--snap)}
+.card::before{content:"";position:absolute;inset:0;background:radial-gradient(260px circle at var(--mx,50%) var(--my,50%),#8b5cf633,transparent 70%);opacity:0;transition:opacity var(--snap)}
+.card:hover{border-color:var(--accent);box-shadow:0 18px 50px #0009}
+.card:hover::before{opacity:1}
+.card h3{font-size:1.05rem;margin-bottom:.4rem;position:relative}
+.card p{color:var(--muted);font-size:.95rem;position:relative}
+.card .icon{font-size:2rem;display:block;margin-bottom:.6rem;position:relative;transition:transform var(--snap) var(--ease)}
+.card:hover .icon{transform:scale(1.35) rotate(-10deg)}
+.badge{display:inline-block;margin-top:.8rem;padding:.2rem .7rem;border-radius:99px;font-size:.8rem;font-weight:600;position:relative}
+.badge{background:#ffffff1a;color:var(--muted)}
+.badge.working{background:#22d3ee26;color:var(--accent2)}        /* EDIT: color for "Working" */
+.badge.in-development{background:#f5c54222;color:var(--gold)}  /* EDIT: color for "In Development" */
+
+/* Filter buttons above the console list */
+.filters{display:flex;gap:.6rem;margin-bottom:1.6rem;flex-wrap:wrap}
+.chip{padding:.5rem 1.1rem;border-radius:99px;border:1px solid #ffffff22;background:transparent;color:var(--muted);cursor:pointer;font:inherit;transition:transform var(--snap) var(--ease),background var(--snap)}
+.chip:hover{transform:translateY(-3px)}
+.chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.card.hide{display:none}
+
+/* ===================== STEPS ===================== */
+.steps{display:grid;gap:1rem;counter-reset:s}
+.step{display:flex;gap:1.2rem;align-items:center;background:var(--panel);padding:1.3rem 1.5rem;border-radius:18px;transition:transform var(--snap) var(--ease)}
+.step:hover{transform:translateX(14px)}
+.step::before{counter-increment:s;content:counter(s);flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),var(--accent2));font:800 1.1rem 'Unbounded'}
+
+/* ===================== FAQ ===================== */
+.faq{background:var(--panel);border-radius:16px;margin-bottom:.8rem;overflow:hidden}
+.faq button{all:unset;box-sizing:border-box;width:100%;padding:1.2rem 1.5rem;cursor:pointer;font-weight:600;display:flex;justify-content:space-between;gap:1rem}
+.faq button::after{content:"+";font-size:1.4rem;line-height:1;transition:transform var(--snap) var(--ease);color:var(--accent2)}
+.faq.open button::after{transform:rotate(135deg)}
+.faq .body{display:grid;grid-template-rows:0fr;transition:grid-template-rows var(--snap) ease}
+.faq.open .body{grid-template-rows:1fr}
+.faq .body p{overflow:hidden;color:var(--muted);padding:0 1.5rem}
+.faq.open .body p{padding-bottom:1.2rem}
+
+/* ===================== FOOTER ===================== */
+footer{text-align:center;padding:4rem 1.5rem;color:var(--muted);border-top:1px solid #ffffff14}
+
+/* ===================== SCROLL REVEAL (things pop in as you scroll) ===================== */
+.reveal{opacity:0;transform:translateY(40px) scale(.96);transition:opacity .5s,transform .6s var(--ease);transition-delay:calc(var(--d,0) * 50ms)}
+.reveal.in{opacity:1;transform:none}
+
+/* People who turn off animations in their system get a calm version */
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;transition-duration:.01ms!important}.reveal,.title span,.hero-btns{opacity:1;transform:none}}
+</style>
+</head>
+
+<body>
+<div id="progress"></div>
+<div class="blob a"></div><div class="blob b"></div>
+<canvas id="sparks"></canvas>
+
+<!-- ===================== SPLASH (the opening logo flash) =====================
+     EDIT: your logo file name is set in SETTINGS (logoFile). -->
+<div id="splash"></div>
+
+<!-- ===================== NAVIGATION BAR =====================
+     EDIT: each <li> is one menu link. href="#something" must match
+     the id="something" on a section below. -->
+<nav id="nav">
+  <a class="brand" href="#home">Wizzard64</a>
+  <ul>
+    <li><a href="#consoles">Consoles</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#start">How to play</a></li>
+    <li><a href="#faq">FAQ</a></li>
+    <li><a class="btn magnetic" style="padding:.5rem 1.2rem" id="navPlay" href="index.html">Play now</a></li>
+  </ul>
+</nav>
+
+<!-- ===================== SECTION: HOME (top of the page) ===================== -->
+<section id="home">
+  <!-- EDIT: the big title. Each letter animates on its own. Set in SETTINGS (siteName). -->
+  <h1 class="title" id="title" aria-label="Wizzard64"></h1>
+
+  <!-- EDIT: the typing line. Phrases are in SETTINGS (typedPhrases). -->
+  <p class="tagline"><span id="typed"></span><span class="caret"></span></p>
+
+  <div class="hero-btns">
+    <a class="btn magnetic" id="heroPlay" href="index.html">Launch Wizzard64</a>
+    <a class="btn ghost magnetic" href="#consoles">See supported consoles</a>
+  </div>
+</section>
+
+<!-- Scrolling strip of console names (auto-built from SETTINGS consoles) -->
+<div class="marquee reveal"><div id="marquee"></div></div>
+
+<!-- ===================== SECTION: STATS ===================== -->
+<section id="stats"><div class="stats" id="statsBox"></div></section>
+
+<!-- ===================== SECTION: CONSOLES ===================== -->
+<section id="consoles">
+  <h2 class="reveal">Pick the console your game came out on</h2>
+  <p class="lead reveal">Wizzard64 puts every system in one place. Working means it runs today. In Development means it’s being added.</p>
+  <div class="filters reveal" id="filters"></div>
+  <div class="grid" id="consoleGrid"></div>
+</section>
+
+<!-- ===================== SECTION: FEATURES ===================== -->
+<section id="features">
+  <h2 class="reveal">Made to just work</h2>
+  <p class="lead reveal">No installs, no setup menus to fight with.</p>
+  <div class="grid" id="featureGrid"></div>
+</section>
+
+<!-- ===================== SECTION: HOW TO PLAY ===================== -->
+<section id="start">
+  <h2 class="reveal">Start playing in four steps</h2>
+  <p class="lead reveal">From opening the page to your first game.</p>
+  <div class="steps" id="stepList"></div>
+</section>
+
+<!-- ===================== SECTION: FAQ ===================== -->
+<section id="faq">
+  <h2 class="reveal">Questions</h2>
+  <p class="lead reveal">Tap a question to open it.</p>
+  <div id="faqList"></div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<footer>
+  <!-- EDIT: footer text -->
+  <p class="reveal">Wizzard64 is free and made for fun. Play games you own, or have bought.</p>
+</footer>
+
+<script>
+/* =====================================================================
+   SETTINGS (EDIT)
+   Everything you'd want to change is in this one block.
+   RULES: keep the quotes "like this", keep the commas at line ends,
+   and keep each line between its { and }. To add something, copy a
+   whole line, paste it right under itself, and change the words.
+===================================================================== */
+const SETTINGS = {
+
+  siteName: "Wizzard64",            // big title (shown letter by letter)
+  logoFile: "Wizzard64/docs/Wizzard64logo.svg",    // splash logo. Path from THIS file to the logo. Falls back to text if missing.
+  showSplash: true,                 // false = skip the opening logo flash
+  playLink: "Wizzard64/index.html",           // where the Play buttons go (your emulator page)
+
+  // Lines that type out under the title, one after another
+  typedPhrases: [
+    "Your all-in-one retro game emulator.",
+    "Most consoles run today. More are being added.",
+    "Pick a console. Load a game. Play.",
+  ],
+
+  // Numbers that count up. value = the number, suffix = what goes after it
+  stats: [
+    { value: 15, suffix: "+", label: "Consoles planned" },
+    { value: 60, suffix: " fps", label: "Smooth N64 play" },
+    { value: 0,  suffix: "$",  label: "Cost to you", prefix: true },
+  ],
+
+  // CONSOLES. status is the label shown on the card. Use any words you like,
+  // for example "Working" or "In Development". The filter buttons build themselves.
+  consoles: [
+    { name: "Nintendo 64",     era: "1996", status: "Working" },
+    { name: "NES",             era: "1983", status: "Working" },
+    { name: "SNES",            era: "1990", status: "Working" },
+    { name: "Game Boy",        era: "1989", status: "Working" },
+    { name: "Game Boy Advance",era: "2001", status: "Working" },
+    { name: "GameCube",        era: "2001", status: "Working" },
+    { name: "Nintendo DS",     era: "2004", status: "In Development" },
+    { name: "Wii",             era: "2006", status: "In Development" },
+    { name: "3DS",             era: "2011", status: "In Development" },
+    { name: "Wii U",           era: "2012", status: "In Development" },
+    { name: "PlayStation 1",   era: "1994", status: "Working" },
+    { name: "PlayStation 2",   era: "2000", status: "Working" },
+    { name: "PlayStation Portable", era: "2004", status: "In Development" },
+    { name: "PlayStation 3",   era: "2006", status: "In Development" },
+  ],
+
+  // FEATURES. icon can be any emoji.
+  features: [
+    { icon: "⚡", title: "Fast to open",      text: "Runs right in your browser. No installs required." },
+    { icon: "🎮", title: "Lots of consoles",  text: "Nintendo and PlayStation classics, all in one service." },
+    { icon: "💾", title: "Save anywhere",     text: "Save your progress and pick it up later." },
+    { icon: "🕹️", title: "Controller ready",  text: "Plug in a controller or play on your keyboard." },
+    { icon: "🖥️", title: "Full screen",       text: "Fill your whole screen with one click." },
+    { icon: "🆓", title: "Free",              text: "Free forever." },
+    { icon: "🕹️", title: "Try out included games", text: "You can try out a couple of fun games to see if you like it. Included are Banjo-Kazooie and Mortal Kombat 4." },
+  ],
+
+  // HOW TO PLAY steps (they number themselves)
+  steps: [
+    "Open Wizzard64 with the Play now button.",
+    "Pick the console your game originally came out on.",
+    "Choose your game file.",
+    "Play! Use the in-game menu to change settings like V-Sync.",
+  ],
+
+  // FAQ. q = question, a = answer
+  faq: [
+    { q: "Which consoles work right now?", a: "Most consoles work right now. Check the console list for the latest." },
+    { q: "My game runs slow. What do I do?", a: "Open the in-game menu and turn V-Sync off. This was the biggest issue for most people." },
+    { q: "Does it cost anything?", a: "No. Wizzard64 is free, and will be forever." },
+    { q: "Where do I get games?", a: "Wizzard64 doesn’t include games. Use files from games you own, or pay for them separately." },
+  ],
+};
+
+/* =====================================================================
+   BELOW THIS LINE IS THE ENGINE. You never need to change it.
+   (It reads SETTINGS above and builds the page.)
+===================================================================== */
+const $ = (s, el = document) => el.querySelector(s);
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; };
+
+/* Play links */
+["navPlay", "heroPlay"].forEach(id => $("#" + id).href = SETTINGS.playLink);
+
+/* Splash */
+const splash = $("#splash");
+if (SETTINGS.showSplash) {
+  const img = new Image(); img.className = "logo"; img.alt = "";
+  img.onerror = () => { splash.innerHTML = `<div class="logo-text">${SETTINGS.siteName}</div>`; };
+  img.src = SETTINGS.logoFile; splash.append(img);
+  setTimeout(() => splash.classList.add("gone"), 1400);
+} else splash.remove();
+
+/* Big title: one span per letter */
+[...SETTINGS.siteName].forEach((ch, i) => {
+  const s = el("span", "", ch); s.style.setProperty("--i", i); $("#title").append(s);
+});
+
+/* Typewriter */
+(function type() {
+  const out = $("#typed"); let p = 0, c = 0, del = false;
+  const tick = () => {
+    const full = SETTINGS.typedPhrases[p];
+    c += del ? -1 : 1; out.textContent = full.slice(0, c);
+    let wait = del ? 18 : 45;
+    if (!del && c === full.length) { del = true; wait = 1800; }
+    else if (del && c === 0) { del = false; p = (p + 1) % SETTINGS.typedPhrases.length; wait = 350; }
+    setTimeout(tick, wait);
+  };
+  setTimeout(tick, 2600);
+})();
+
+/* Marquee (list twice so the loop is seamless) */
+$("#marquee").innerHTML = [...SETTINGS.consoles, ...SETTINGS.consoles].map(c => `<span>${c.name}</span>`).join("");
+
+/* Stats */
+SETTINGS.stats.forEach(s => {
+  const d = el("div", "stat reveal", `<strong data-v="${s.value}" data-suf="${s.suffix}" data-pre="${s.prefix ? 1 : ""}">0</strong><small>${s.label}</small>`);
+  $("#statsBox").append(d);
+});
+
+/* Consoles + filter chips (built from whatever status words you use) */
+const grid = $("#consoleGrid");
+const slug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+SETTINGS.consoles.forEach(c => {
+  const card = el("div", "card reveal", `<h3>${c.name}</h3><p>Released ${c.era}</p><span class="badge ${slug(c.status)}">${c.status}</span>`);
+  card.dataset.status = c.status; grid.append(card);
+});
+["All", ...new Set(SETTINGS.consoles.map(c => c.status))].forEach((t, i) => {
+  const b = el("button", "chip" + (i ? "" : " on"), t);
+  b.onclick = () => {
+    document.querySelectorAll(".chip").forEach(x => x.classList.remove("on")); b.classList.add("on");
+    grid.querySelectorAll(".card").forEach(card => card.classList.toggle("hide", i !== 0 && card.dataset.status !== t));
+  };
+  $("#filters").append(b);
+});
+
+/* Features */
+SETTINGS.features.forEach(f => $("#featureGrid").append(el("div", "card reveal", `<span class="icon">${f.icon}</span><h3>${f.title}</h3><p>${f.text}</p>`)));
+
+/* Steps */
+SETTINGS.steps.forEach(t => $("#stepList").append(el("div", "step reveal", `<span>${t}</span>`)));
+
+/* FAQ */
+SETTINGS.faq.forEach(f => {
+  const box = el("div", "faq reveal", `<button aria-expanded="false">${f.q}</button><div class="body"><p>${f.a}</p></div>`);
+  box.querySelector("button").onclick = () => {
+    const open = box.classList.toggle("open"); box.querySelector("button").setAttribute("aria-expanded", open);
+  };
+  $("#faqList").append(box);
+});
+
+/* Scroll reveal with stagger inside each group */
+const io = new IntersectionObserver(entries => entries.forEach(e => {
+  if (!e.isIntersecting) return;
+  e.target.classList.add("in"); io.unobserve(e.target);
+  const n = e.target.querySelector("strong[data-v]");
+  if (n) count(n);
+}), { threshold: .15 });
+document.querySelectorAll(".reveal").forEach(r => {
+  r.style.setProperty("--d", [...r.parentElement.children].indexOf(r) % 8);
+  io.observe(r);
+});
+
+/* Number count-up */
+function count(n) {
+  const end = +n.dataset.v, suf = n.dataset.suf, t0 = performance.now();
+  const f = t => {
+    const k = Math.min((t - t0) / 1200, 1), v = Math.round(end * (1 - Math.pow(1 - k, 3)));
+    n.textContent = (n.dataset.pre ? suf : "") + v + (n.dataset.pre ? "" : suf);
+    if (k < 1) requestAnimationFrame(f);
+  };
+  requestAnimationFrame(f);
+}
+
+/* Card tilt + glow that follows the mouse */
+document.addEventListener("pointermove", e => {
+  const c = e.target.closest?.(".card"); if (!c) return;
+  const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+  c.style.setProperty("--mx", x * 100 + "%"); c.style.setProperty("--my", y * 100 + "%");
+  c.style.setProperty("--ry", (x - .5) * 14 + "deg"); c.style.setProperty("--rx", (.5 - y) * 14 + "deg");
+});
+document.addEventListener("pointerout", e => {
+  const c = e.target.closest?.(".card"); if (c) { c.style.setProperty("--rx", "0deg"); c.style.setProperty("--ry", "0deg"); }
+});
+
+/* Magnetic buttons (they lean toward your cursor) */
+document.querySelectorAll(".magnetic").forEach(b => {
+  b.addEventListener("pointermove", e => {
+    const r = b.getBoundingClientRect();
+    b.style.translate = `${(e.clientX - r.left - r.width / 2) * .25}px ${(e.clientY - r.top - r.height / 2) * .35}px`;
+  });
+  b.addEventListener("pointerleave", () => b.style.translate = "");
+});
+
+/* Nav shrink + scroll progress bar */
+addEventListener("scroll", () => {
+  $("#nav").classList.toggle("stuck", scrollY > 30);
+  $("#progress").style.width = scrollY / (document.documentElement.scrollHeight - innerHeight) * 100 + "%";
+}, { passive: true });
+
+/* Floating sparks that dodge your mouse */
+(function sparks() {
+  if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+  const cv = $("#sparks"), cx = cv.getContext("2d"); let W, H, m = { x: -999, y: -999 };
+  const resize = () => { W = cv.width = innerWidth; H = cv.height = innerHeight; }; resize(); addEventListener("resize", resize);
+  addEventListener("pointermove", e => { m.x = e.clientX; m.y = e.clientY; });
+  const cols = ["#8b5cf6", "#22d3ee", "#f5c542"];
+  const P = Array.from({ length: 70 }, () => ({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 2 + .6, vy: -(Math.random() * .4 + .1), vx: 0, c: cols[Math.floor(Math.random() * 3)] }));
+  (function loop() {
+    cx.clearRect(0, 0, W, H);
+    P.forEach(p => {
+      const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy);
+      if (d < 120) { p.vx += dx / d * .6; p.y += dy / d * 1.2; }
+      p.vx *= .92; p.x += p.vx; p.y += p.vy;
+      if (p.y < -5) { p.y = H + 5; p.x = Math.random() * W; }
+      cx.globalAlpha = .7; cx.fillStyle = p.c; cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, 7); cx.fill();
+    });
+    requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>

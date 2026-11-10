@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wizzard64</title>
+<link rel="icon" href="docs/Wizzard64logo.svg" type="image/svg+xml">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05060d">
+<style>
+  :root {
+    --ink: #05060d; --panel: #12141f; --edge: #2a2f4a;
+    --glow: #7a8cff; --text: #e8e9f5; --dim: #8c90ab; --warn: #ffb86b;
+    --font: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--ink); color: var(--text); font-family: var(--font); }
+  body { overflow: hidden; }
+  button { font: inherit; }
+  :focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; }
+
+  .screen { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; overflow-y: auto; padding: 2rem 1rem 3rem; }
+  .screen.active { display: flex; }
+
+  /* Boot splash: the one orchestrated moment */
+  #splash { justify-content: center; cursor: pointer; }
+  #splash img { width: min(42vw, 200px); opacity: 0; animation: rise 2.4s ease-out 0.3s forwards; }
+  #splash h1 { margin: 1.2rem 0 0; font-size: clamp(1.4rem, 5vw, 2.2rem); letter-spacing: 0.35em; font-weight: 700; opacity: 0; animation: fade 1.2s ease-out 1.6s forwards; }
+  #splash small { position: absolute; bottom: 1.5rem; color: var(--dim); opacity: 0; animation: fade 1s ease-out 2.4s forwards; }
+  @keyframes rise { 0% { opacity: 0; transform: scale(.8); filter: drop-shadow(0 0 0 var(--glow)); }
+                    60% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 28px var(--glow)); }
+                    100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 14px var(--glow)); } }
+  @keyframes fade { to { opacity: 1; } }
+  #splash.leaving { animation: out .6s ease-in forwards; }
+  @keyframes out { to { opacity: 0; } }
+
+  /* Home */
+  #home header { text-align: center; max-width: 36rem; margin-bottom: 1.4rem; }
+  #home .mini { width: 72px; filter: drop-shadow(0 0 10px var(--glow)); }
+  #home h2 { font-size: clamp(1.4rem, 4vw, 2rem); margin: .8rem 0 .4rem; }
+  #home p { color: var(--dim); line-height: 1.6; margin: 0; }
+  #search { width: min(60rem, 100%); font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: .4rem; padding: .7rem .9rem; margin-bottom: 1.4rem; }
+  #search:focus { border-color: var(--glow); outline: none; }
+  #wrap { width: min(60rem, 100%); }
+  .group { margin-bottom: 1.6rem; }
+  .group h3 { font-size: .95rem; font-weight: 600; color: var(--dim); margin: 0 0 .6rem; padding-bottom: .4rem; border-bottom: 1px solid var(--edge); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .6rem; }
+  .console { text-align: left; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: .4rem; padding: .8rem .9rem; cursor: pointer; transition: border-color .15s, background .15s; }
+  .console b { display: block; font-size: 1rem; }
+  .console span { display: block; margin-top: .25rem; font-size: .78rem; color: var(--dim); }
+  .console:hover:not(:disabled), .console:focus-visible { border-color: var(--glow); background: #191c2c; }
+  .console:disabled { cursor: not-allowed; opacity: .45; }
+  #none { color: var(--dim); text-align: center; display: none; }
+  .foot { margin-top: 1rem; color: var(--dim); font-size: .78rem; text-align: center; line-height: 1.6; }
+
+  /* ROM picker */
+  #load { justify-content: center; text-align: center; }
+  #load h2 { margin: 0 0 .4rem; }
+  #hint { color: var(--dim); margin: 0 0 1.2rem; font-size: .85rem; max-width: 30rem; line-height: 1.5; }
+  #drop { position: relative; width: min(30rem, 100%); height: 14rem; display: flex; align-items: center; justify-content: center; padding: 1rem;
+          background: var(--panel); border: 2px dashed var(--edge); border-radius: .5rem; color: var(--dim); transition: border-color .15s, color .15s; }
+  #drop:hover, #drop.over { border-color: var(--glow); color: var(--text); }
+  #drop input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  #biosRow { display: none; margin-top: 1rem; color: var(--dim); font-size: .85rem; }
+  #biosRow label { cursor: pointer; text-decoration: underline; }
+  #biosRow input { display: none; }
+  #msg { display: none; margin-top: 1rem; max-width: 30rem; color: var(--warn); line-height: 1.5; font-size: .88rem; }
+  #msg button { margin-left: .5rem; color: var(--text); background: none; border: 1px solid var(--warn); border-radius: .3rem; padding: .2rem .6rem; cursor: pointer; }
+  .back { margin-top: 1.2rem; background: none; color: var(--dim); border: 1px solid var(--edge); border-radius: .4rem; padding: .6rem 1.2rem; cursor: pointer; }
+  .back:hover, .back:focus-visible { color: var(--text); border-color: var(--glow); }
+
+  /* Player */
+  #display { position: fixed; inset: 0; background: #000; }
+  #display > div { width: 100%; height: 100%; }
+  #home-btn { position: fixed; top: .6rem; left: .6rem; z-index: 99999; opacity: .35; transition: opacity .2s; color: var(--text); background: rgba(5,6,13,.8); border: 1px solid var(--edge); border-radius: .4rem; padding: .4rem .8rem; cursor: pointer; font-size: .8rem; }
+  #home-btn:hover, #home-btn:focus-visible { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #splash img, #splash h1, #splash small { animation-duration: .01s; animation-delay: 0s; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Boot splash -->
+<section id="splash" class="screen active" aria-label="Wizzard64 is starting">
+  <img src="docs/Wizzard64logo.svg" alt="Wizzard64 logo">
+  <h1>Wizzard64</h1>
+  <small>Press any key to skip</small>
+</section>
+
+<!-- 2. Welcome + console list -->
+<section id="home" class="screen">
+  <header>
+    <img class="mini" src="docs/Wizzard64logo.svg" alt="">
+    <h2>Welcome to Wizzard64!</h2>
+    <p>Your all-in-one retro game emulator. To start, select the console your game was originally released on.</p>
+  </header>
+  <input id="search" type="search" placeholder="Search consoles (press / to focus)" aria-label="Search consoles" autocomplete="off">
+  <div id="wrap"></div>
+  <p id="none">No console matches that search.</p>
+  <p class="foot">GameCube, Wii, Wii U, 3DS, PS2 and PS3 are too demanding for any browser emulator today.<br>Use Dolphin, Cemu, Azahar, PCSX2 and RPCS3 on your desktop for those.</p>
+</section>
+
+<!-- 3. ROM picker -->
+<section id="load" class="screen">
+  <h2 id="loadTitle"></h2>
+  <p id="hint"></p>
+  <div id="drop">
+    <input type="file" id="file">
+    <span id="dropText">Drop your game file here, or click to choose one</span>
+  </div>
+  <div id="biosRow"><label>Add a BIOS file (optional)<input type="file" id="bios"></label> <span id="biosName"></span></div>
+  <div id="msg" role="alert"></div>
+  <button class="back" id="back">Back to consoles</button>
+</section>
+
+<script>
+  /* ---------- Console list ----------
+     core = EmulatorJS core name, x = accepted file extensions, bios = offers an optional BIOS picker.
+     Add or remove entries freely. */
+  const ARC = ["zip", "7z"];
+  const GROUPS = [
+    { name: "Nintendo", items: [
+      { n: "NES / Famicom", core: "nes", s: "1983", x: ["nes", "fds", "unf", "unif"] },
+      { n: "SNES", core: "snes", s: "1990", x: ["smc", "sfc", "fig", "swc"] },
+      { n: "Nintendo 64", core: "n64", s: "1996", x: ["z64", "n64", "v64"] },
+      { n: "Game Boy / Color", core: "gb", s: "1989", x: ["gb", "gbc"] },
+      { n: "Game Boy Advance", core: "gba", s: "2001", x: ["gba"] },
+      { n: "Nintendo DS", core: "nds", s: "2004", x: ["nds"] },
+      { n: "Virtual Boy", core: "vb", s: "1995", x: ["vb", "vboy"] },
+      { n: "GameCube", s: "2001", off: 1 },
+      { n: "Wii", s: "2006", off: 1 },
+      { n: "Wii U", s: "2012", off: 1 },
+      { n: "3DS / 2DS", s: "2011", off: 1 }
+    ]},
+    { name: "Sony", items: [
+      { n: "PlayStation", core: "psx", s: "1994", x: ["cue", "bin", "iso", "chd", "pbp", "img", "m3u"], bios: 1 },
+      { n: "PSP", core: "psp", s: "2004", x: ["iso", "cso", "pbp"] },
+      { n: "PlayStation 2", s: "2000", off: 1 },
+      { n: "PlayStation 3", s: "2006", off: 1 }
+    ]},
+    { name: "Sega", items: [
+      { n: "Master System", core: "segaMS", s: "1985", x: ["sms"] },
+      { n: "Mega Drive / Genesis", core: "segaMD", s: "1988", x: ["md", "gen", "smd", "bin"] },
+      { n: "Game Gear", core: "segaGG", s: "1990", x: ["gg"] },
+      { n: "Sega CD", core: "segaCD", s: "1991", x: ["cue", "iso", "chd", "bin"], bios: 1 },
+      { n: "32X", core: "sega32x", s: "1994", x: ["32x"] },
+      { n: "Saturn", core: "segaSaturn", s: "1994", x: ["cue", "iso", "chd", "bin"], bios: 1 }
+    ]},
+    { name: "Atari", items: [
+      { n: "Atari 2600", core: "atari2600", s: "1977", x: ["a26", "bin"] },
+      { n: "Atari 7800", core: "atari7800", s: "1986", x: ["a78"] },
+      { n: "Lynx", core: "lynx", s: "1989", x: ["lnx"], bios: 1 },
+      { n: "Jaguar", core: "jaguar", s: "1993", x: ["j64", "jag"] }
+    ]},
+    { name: "Other", items: [
+      { n: "TurboGrafx-16", core: "pce", s: "NEC, 1987", x: ["pce", "sgx", "cue", "chd"] },
+      { n: "Neo Geo Pocket", core: "ngp", s: "SNK, 1998", x: ["ngp", "ngc"] },
+      { n: "WonderSwan", core: "ws", s: "Bandai, 1999", x: ["ws", "wsc"] },
+      { n: "ColecoVision", core: "coleco", s: "1982", x: ["col"] },
+      { n: "Commodore 64", core: "vice_x64sc", s: "1982", x: ["d64", "t64", "prg", "crt", "tap", "x64"] },
+      { n: "3DO", core: "3do", s: "1993", x: ["iso", "cue", "chd"], bios: 1 },
+      { n: "Arcade", core: "arcade", s: "Various", x: [] }
+    ]}
+  ];
+  const ALL = GROUPS.flatMap(g => g.items);
+
+  const $ = id => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  const debug = params.get("debug") === "1" || params.get("debug") === "true";
+  const threads = (params.get("threads") === "1" || params.get("threads") === "true") && !!window.SharedArrayBuffer;
+  let current = null, biosFile = null, pending = null;
+
+  const store = {
+    get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } },
+    set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+
+  function show(id) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.toggle("active", s.id === id));
+  }
+
+  /* ---------- Build the console grid (with a Recent row) ---------- */
+  function consoleButton(c) {
+    const b = document.createElement("button");
+    b.className = "console";
+    b.dataset.name = (c.n + " " + c.s).toLowerCase();
+    b.innerHTML = `<b>${c.n}</b><span>${c.off ? "Desktop emulator only" : c.s}</span>`;
+    if (c.off) { b.disabled = true; b.title = "Browsers can't run this console yet"; }
+    else b.onclick = () => pick(c);
+    return b;
+  }
+
+  function build() {
+    const wrap = $("wrap");
+    wrap.innerHTML = "";
+    const recent = store.get("w64recent", []).map(core => ALL.find(c => c.core === core)).filter(Boolean);
+    const groups = recent.length ? [{ name: "Recently played", items: recent }, ...GROUPS] : GROUPS;
+    groups.forEach(g => {
+      const el = document.createElement("div");
+      el.className = "group";
+      el.innerHTML = `<h3>${g.name}</h3><div class="grid"></div>`;
+      g.items.forEach(c => el.querySelector(".grid").appendChild(consoleButton(c)));
+      wrap.appendChild(el);
+    });
+  }
+  build();
+
+  /* ---------- Search ---------- */
+  $("search").oninput = () => {
+    const q = $("search").value.trim().toLowerCase();
+    let any = false;
+    document.querySelectorAll("#wrap .group").forEach(g => {
+      let shown = 0;
+      g.querySelectorAll(".console").forEach(b => {
+        const hit = !q || b.dataset.name.includes(q);
+        b.style.display = hit ? "" : "none";
+        if (hit) shown++;
+      });
+      g.style.display = shown ? "" : "none";
+      if (shown) any = true;
+    });
+    $("none").style.display = any ? "none" : "block";
+  };
+
+  /* ---------- Pick a console ---------- */
+  function pick(c) {
+    current = c; biosFile = null; pending = null;
+    $("loadTitle").textContent = `Load a ${c.n} game`;
+    const ext = c.x.length ? c.x.map(e => "." + e).join(" ") + " (or .zip / .7z)" : ".zip (keep the ROM zipped, as MAME expects)";
+    $("hint").textContent = `Accepted files: ${ext}`;
+    $("dropText").textContent = "Drop your game file here, or click to choose one";
+    $("file").value = "";
+    $("bios").value = "";
+    $("biosName").textContent = "";
+    $("biosRow").style.display = c.bios ? "block" : "none";
+    $("msg").style.display = "none";
+    show("load");
+  }
+
+  /* ---------- Splash -> home ---------- */
+  let left = false;
+  function leaveSplash() {
+    if (left) return; left = true;
+    try { sessionStorage.setItem("w64seen", "1"); } catch (e) {}
+    $("splash").classList.add("leaving");
+    setTimeout(() => { show("home"); $("search").focus({ preventScroll: true }); }, 600);
+  }
+  $("splash").addEventListener("click", leaveSplash);
+  setTimeout(leaveSplash, 4200);
+
+  addEventListener("keydown", e => {
+    if ($("splash") && $("splash").classList.contains("active")) return leaveSplash();
+    const home = $("home"), load = $("load");
+    if (e.key === "/" && home && home.classList.contains("active") && document.activeElement !== $("search")) {
+      e.preventDefault(); $("search").focus();
+    }
+    if (e.key === "Escape" && load && load.classList.contains("active")) show("home");
+  });
+
+  /* ---------- ROM picker ---------- */
+  $("back").onclick = () => show("home");
+  $("bios").onchange = () => { biosFile = $("bios").files[0] || null; $("biosName").textContent = biosFile ? biosFile.name : ""; };
+
+  function checkAndLaunch(f) {
+    const ext = (f.name.split(".").pop() || "").toLowerCase();
+    const ok = !current.x.length ? ext === "zip" : current.x.includes(ext) || ARC.includes(ext);
+    if (ok) return launch(f, current.core);
+    pending = f;
+    const m = $("msg");
+    m.innerHTML = `“${f.name.replace(/</g, "&lt;")}” doesn't look like a ${current.n} game.`;
+    const b = document.createElement("button");
+    b.textContent = "Load anyway";
+    b.onclick = () => launch(pending, current.core);
+    m.appendChild(b);
+    m.style.display = "block";
+  }
+  $("file").onchange = () => { const f = $("file").files[0]; if (f) { $("dropText").textContent = f.name; checkAndLaunch(f); } };
+  const drop = $("drop");
+  drop.ondragover = () => drop.classList.add("over");
+  drop.ondragleave = () => drop.classList.remove("over");
+  drop.ondrop = () => drop.classList.remove("over");
+
+  /* ---------- Launch EmulatorJS ---------- */
+  function launch(fileOrUrl, core) {
+    const name = typeof fileOrUrl === "string" ? fileOrUrl : fileOrUrl.name;
+    const c = ALL.find(x => x.core === core);
+    if (c) store.set("w64recent", [core, ...store.get("w64recent", []).filter(k => k !== core)].slice(0, 4));
+
+    document.querySelectorAll(".screen").forEach(s => s.remove());
+    const d = document.createElement("div");
+    d.id = "display";
+    d.innerHTML = '<div id="game"></div>';
+    document.body.appendChild(d);
+
+    const back = document.createElement("button");
+    back.id = "home-btn";
+    back.textContent = "Exit to consoles";
+    back.onclick = () => { if (confirm("Exit to the console list? Unsaved progress will be lost.")) location.href = location.pathname; };
+    document.body.appendChild(back);
+
+    document.title = window.EJS_gameName = name.replace(/\.[^.]+$/, "");
+    document.title += " – Wizzard64";
+    window.EJS_player = "#game";
+    window.EJS_biosUrl = biosFile ? URL.createObjectURL(biosFile) : "";
+    window.EJS_gameUrl = fileOrUrl;
+    window.EJS_core = core;
+    window.EJS_pathtodata = "data/";
+    window.EJS_startOnLoaded = true;
+    window.EJS_color = "#7a8cff";
+    window.EJS_backgroundColor = "#000";
+    window.EJS_DEBUG_XX = debug;
+    window.EJS_disableDatabases = true;
+    window.EJS_threads = threads;
+
+    const s = document.createElement("script");
+    s.src = "data/loader.js";
+    s.onerror = () => {
+      d.innerHTML = '<p style="color:#ffb86b;padding:2rem;line-height:1.6;max-width:36rem;margin:auto">Couldn\u2019t load data/loader.js. Open the Wizzard64 folder in VS Code, check that the data folder exists, and start the page with Live Server. <a style="color:#7a8cff" href="' + location.pathname + '">Back to consoles</a></p>';
+    };
+    document.body.appendChild(s);
+  }
+
+  /* Shortcut: ?rom=mario.z64&core=n64 loads roms/mario.z64 directly */
+  if (params.get("rom") && params.get("core")) {
+    launch("roms/" + params.get("rom"), params.get("core"));
+  } else {
+    try { if (sessionStorage.getItem("w64seen") && !params.has("splash")) { left = true; show("home"); } } catch (e) {}
+  }
+</script>
+</body>
+</html>
